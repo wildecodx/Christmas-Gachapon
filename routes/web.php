@@ -18,6 +18,13 @@ Route::post('/setup', [GachaponSetupController::class, 'store'])
     ->middleware('throttle:10,1')
     ->name('gachapon.setup.store');
 
+    Route::get('/debug-cache', function () {
+    return response()->json([
+        'cache_store' => config('cache.default'),
+        'session_driver' => config('session.driver'),
+    ]);
+});
+
 
 // Godchild invitation page
 Route::prefix('play/{token}')
