@@ -7,13 +7,9 @@ use App\Http\Controllers\GachaponSetupController;
 use App\Http\Controllers\GachaponPlayController;
 
 // Welcome page — appears first
-// Route::get('/', function () {
-//     return view('welcome');
-// })->name('home');
-
 Route::get('/', function () {
-    return 'Laravel is working on Render!';
-});
+    return view('welcome');
+})->name('home');
 
 // Setup page — opens after clicking Let's Get Started
 Route::get('/setup', [GachaponSetupController::class, 'create'])
