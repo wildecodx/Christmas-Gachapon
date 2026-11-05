@@ -28,6 +28,9 @@ Route::prefix('play/{token}')
         Route::get('/', [GachaponPlayController::class, 'show'])
             ->name('play');
 
+        Route::post('/claim-code', [GachaponPlayController::class, 'claimCode'])
+            ->name('claim-code');
+
         Route::post('/verify-code', [
             GachaponPlayController::class,
             'verifyCode',

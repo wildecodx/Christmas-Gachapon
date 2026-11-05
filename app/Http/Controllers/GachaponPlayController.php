@@ -14,18 +14,61 @@ use Illuminate\View\View;
 
 class GachaponPlayController extends Controller
 {
-    public function show(string $token): View
+    public function show(string $token)
     {
         $machine = GachaponMachine::where('public_token', $token)
             ->where('status', 'active')
             ->firstOrFail();
 
+        $godchild_code = $this->code_for_this_device($machine);
+
+        return response()
+            ->view('gachapon.play', [
+                'machine'       => $machine,
+                'godchild_code' => $godchild_code,
+            ])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+
+    public function claimCode(string $token): JsonResponse
+    {
+        $rs = [
+            'code'  => 0,
+            'title' => 'Ooops!',
+            'msg'   => 'Something went wrong.',
+        ];
+
+        $machine = GachaponMachine::where('public_token', $token)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$machine) {
+            $rs['msg'] = 'This Christmas surprise could not be found.';
+
+            return response()->json($rs, 404);
+        }
+
         $godchild_code = $this->issue_godchild_code($machine);
 
-        return view('gachapon.play', [
-            'machine'       => $machine,
-            'godchild_code' => null,
-        ]);
+        if ($godchild_code === null) {
+            $rs['title'] = 'Already claimed';
+            $rs['msg']   = 'Every special code for this Christmas surprise has already been claimed.';
+
+            return response()->json($rs, 422);
+        }
+
+        $rs['code']  = 1;
+        $rs['title'] = 'Your code';
+        $rs['msg']   = 'This code belongs to this device.';
+        $rs['data']  = [
+            'godchild_code' => $godchild_code,
+            'machine_url'   => route('gachapon.machine', [
+                'token' => $machine->public_token,
+            ]),
+        ];
+
+        return response()->json($rs);
     }
 
     public function machine(string $token): View
@@ -118,6 +161,23 @@ class GachaponPlayController extends Controller
             return response()->json($rs, 422);
         }
 
+        $owned_code = $this->code_for_this_device($machine);
+
+        if ($owned_code === null) {
+            $rs['msg'] = 'Open the letter on this device before using a gift code.';
+
+            return response()->json($rs, 422);
+        }
+
+        if (
+            strlen($owned_code) !== strlen($normalized_code)
+            || !hash_equals($owned_code, $normalized_code)
+        ) {
+            $rs['msg'] = 'This gift code can only be used on the device that opened the letter.';
+
+            return response()->json($rs, 422);
+        }
+
         $participant = GachaponParticipant::where('machine_id', $machine->id)
             ->where('code_hash', hash('sha256', $normalized_code))
             ->where('is_active', true)
@@ -197,7 +257,7 @@ class GachaponPlayController extends Controller
 
     private function issue_godchild_code(GachaponMachine $machine): ?string
     {
-        $existing_code = $this->current_display_code($machine);
+        $existing_code = $this->code_for_this_device($machine);
 
         if ($existing_code !== null) {
             return $existing_code;
@@ -237,7 +297,7 @@ class GachaponPlayController extends Controller
                 return null;
             }
 
-            GachaponParticipant::create([
+            $participant = GachaponParticipant::create([
                 'machine_id'          => $locked_machine->id,
                 'name'                => 'Godchild ' . ($godchild_count + 1),
                 'code'                => $plain_code,
@@ -248,13 +308,90 @@ class GachaponPlayController extends Controller
                 'is_active'           => true,
             ]);
 
-            session([
-                'gachapon_display_code'       => $plain_code,
-                'gachapon_display_machine_id' => $locked_machine->id,
-            ]);
+            $this->remember_device($locked_machine, $participant, $plain_code);
 
             return $plain_code;
         });
+    }
+
+
+    private function code_for_this_device(GachaponMachine $machine): ?string
+    {
+        $existing_code = $this->current_display_code($machine);
+
+        if ($existing_code !== null) {
+            return $existing_code;
+        }
+
+        $participant = $this->device_participant($machine);
+
+        if (!$participant || !is_string($participant->code) || $participant->code === '') {
+            return null;
+        }
+
+        $this->remember_device($machine, $participant, $participant->code);
+
+        return $participant->code;
+    }
+
+
+    private function remember_device(
+        GachaponMachine $machine,
+        GachaponParticipant $participant,
+        string $plain_code
+    ): void {
+        session([
+            'gachapon_display_code'       => $plain_code,
+            'gachapon_display_machine_id' => $machine->id,
+        ]);
+
+        $payload   = $machine->id . '|' . $participant->id;
+        $signature = hash_hmac('sha256', $payload, (string) config('app.key'));
+
+        cookie()->queue(cookie(
+            'gachapon_device_' . $machine->id,
+            $payload . '|' . $signature,
+            60 * 24 * 30,
+            '/',
+            null,
+            false,
+            true,
+            false,
+            'Lax'
+        ));
+    }
+
+
+    private function device_participant(GachaponMachine $machine): ?GachaponParticipant
+    {
+        $raw = request()->cookie('gachapon_device_' . $machine->id);
+
+        if (!is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        $parts = explode('|', $raw);
+
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        [$machine_id, $participant_id, $signature] = $parts;
+        $payload  = $machine_id . '|' . $participant_id;
+        $expected = hash_hmac('sha256', $payload, (string) config('app.key'));
+
+        if (!hash_equals($expected, $signature)) {
+            return null;
+        }
+
+        if ((int) $machine_id !== (int) $machine->id) {
+            return null;
+        }
+
+        return GachaponParticipant::where('id', $participant_id)
+            ->where('machine_id', $machine->id)
+            ->where('is_active', true)
+            ->first();
     }
 
     private function current_display_code(GachaponMachine $machine): ?string

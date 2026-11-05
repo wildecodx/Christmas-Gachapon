@@ -381,6 +381,10 @@
 
         /* Buttons */
 
+        [hidden] {
+            display: none !important;
+        }
+
         .primary-button {
             min-height: 52px;
             display: inline-flex;
@@ -812,18 +816,20 @@
             <div class="code-panel">
                 <p class="code-label">YOUR SPECIAL CODE</p>
 
-                @if (!empty($godchild_code))
-                    <p class="personal-code" id="personal-code">{{ $godchild_code }}</p>
+                <p class="personal-code" id="personal-code" @if (empty($godchild_code)) hidden @endif>{{ $godchild_code }}</p>
 
-                    <button class="copy-button" id="copy-code" type="button">
-                        Copy my code
-                    </button>
-                @else
-                    <p class="code-placeholder">
-                        Every special code for this Christmas surprise
-                        has already been claimed.
-                    </p>
-                @endif
+                <button class="copy-button" id="copy-code" type="button" @if (empty($godchild_code)) hidden @endif>
+                    Copy my code
+                </button>
+
+                <p class="code-placeholder" id="code-placeholder" @if (!empty($godchild_code)) hidden @endif>
+                    Your special code will appear on this device when the letter opens.
+                </p>
+
+                <p class="code-placeholder" id="code-claimed" hidden>
+                    Every special code for this Christmas surprise
+                    has already been claimed.
+                </p>
             </div>
 
             <div class="letter-body">
@@ -840,20 +846,15 @@
             </div>
 
             <div class="letter-actions">
-                @if (!empty($godchild_code))
-                    <button
-                        class="primary-button"
-                        id="proceed-button"
-                        type="button"
-                        data-play-url="{{ route('gachapon.machine', ['token' => $machine->public_token]) }}"
-                    >
-                        🎁 Generate your gift
-                    </button>
-                @else
-                    <button class="primary-button" type="button" disabled>
-                        🎁 Generate your gift
-                    </button>
-                @endif
+                <button
+                    class="primary-button"
+                    id="proceed-button"
+                    type="button"
+                    data-play-url="{{ route('gachapon.machine', ['token' => $machine->public_token]) }}"
+                    @if (empty($godchild_code)) hidden @endif
+                >
+                    🎁 Generate your gift
+                </button>
 
                 <button class="close-letter" id="close-letter" type="button">
                     Close letter
@@ -877,8 +878,14 @@
         const closeButton = document.getElementById('close-letter');
         const copyButton = document.getElementById('copy-code');
         const codeElement = document.getElementById('personal-code');
+        const codePlaceholder = document.getElementById('code-placeholder');
+        const codeClaimed = document.getElementById('code-claimed');
         const statusMessage = document.getElementById('status-message');
         const proceedButton = document.getElementById('proceed-button');
+        const claimUrl = @json(route('gachapon.claim-code', ['token' => $machine->public_token]));
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+        let claimPromise = null;
 
         const supportsHover = window.matchMedia(
             '(hover: hover) and (pointer: fine)'
@@ -929,6 +936,100 @@
             });
         }
 
+        function showGiftCode(giftCode) {
+            if (!codeElement) {
+                return;
+            }
+
+            codeElement.hidden = false;
+            codeElement.textContent = giftCode;
+
+            if (copyButton) {
+                copyButton.hidden = false;
+            }
+
+            if (codePlaceholder) {
+                codePlaceholder.hidden = true;
+            }
+
+            if (codeClaimed) {
+                codeClaimed.hidden = true;
+            }
+
+            if (proceedButton) {
+                proceedButton.hidden = false;
+            }
+        }
+
+        function showClaimedMessage() {
+            if (codeElement) {
+                codeElement.hidden = true;
+            }
+
+            if (copyButton) {
+                copyButton.hidden = true;
+            }
+
+            if (codePlaceholder) {
+                codePlaceholder.hidden = true;
+            }
+
+            if (codeClaimed) {
+                codeClaimed.hidden = false;
+            }
+
+            if (proceedButton) {
+                proceedButton.hidden = true;
+            }
+        }
+
+        function claimGiftCode() {
+            if (claimPromise) {
+                return claimPromise;
+            }
+
+            claimPromise = (async () => {
+                if (codeElement && codeElement.textContent.trim() !== '') {
+                    return true;
+                }
+
+                const requestBody = {};
+                const response = await fetch(claimUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const res = await response.json();
+                let { code, title, msg, data } = res;
+
+                if (code == 1 && data && data.godchild_code) {
+                    showGiftCode(data.godchild_code);
+                    return true;
+                }
+
+                showClaimedMessage();
+
+                if (statusMessage) {
+                    statusMessage.textContent = msg || title || 'Every special code has already been claimed.';
+                }
+
+                return false;
+            })();
+
+            return claimPromise;
+        }
+
+        claimGiftCode().catch(() => {
+            claimPromise = null;
+        });
+
         /*
          * Open the envelope.
          */
@@ -943,27 +1044,28 @@
             openButton.disabled = true;
             openButton.innerHTML = '✉ OPENING YOUR LETTER...';
 
-            // Reset the tilt before the opening animation.
-            envelopeTilt.classList.add('is-opening');
-            envelopeTilt.style.transform =
-                'rotateX(0deg) rotateY(0deg)';
+            claimGiftCode().catch(() => {
+                return false;
+            }).then(() => {
+                envelopeTilt.classList.add('is-opening');
+                envelopeTilt.style.transform =
+                    'rotateX(0deg) rotateY(0deg)';
 
-            // Start opening the flap and sliding out the letter.
-            envelope.classList.add('opened');
+                envelope.classList.add('opened');
 
-            // Show the full letter after the envelope animation.
-            openTimer = window.setTimeout(() => {
-                overlay.hidden = false;
+                openTimer = window.setTimeout(() => {
+                    overlay.hidden = false;
 
-                requestAnimationFrame(() => {
-                    overlay.classList.add('visible');
+                    requestAnimationFrame(() => {
+                        overlay.classList.add('visible');
 
-                    focusTimer = window.setTimeout(() => {
-                        closeButton.focus();
-                        isOpening = false;
-                    }, 500);
-                });
-            }, 850);
+                        focusTimer = window.setTimeout(() => {
+                            closeButton.focus();
+                            isOpening = false;
+                        }, 500);
+                    });
+                }, 850);
+            });
         }
 
         /*
