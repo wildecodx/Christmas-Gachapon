@@ -873,6 +873,7 @@
     (() => {
         const envelope = document.getElementById('envelope');
         const envelopeTilt = document.getElementById('envelope-tilt');
+        const envelope = document.getElementById("envelope");
         const openButton = document.getElementById('open-envelope');
         const overlay = document.getElementById('letter-overlay');
         const closeButton = document.getElementById('close-letter');
@@ -1108,6 +1109,7 @@
         }
 
         openButton.addEventListener('click', openLetter);
+        envelope.addEventListener('click', openLetter);
         closeButton.addEventListener('click', closeLetter);
 
         // Close the letter by clicking outside the card.
