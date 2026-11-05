@@ -24,7 +24,7 @@ class GachaponPlayController extends Controller
 
         return view('gachapon.play', [
             'machine'       => $machine,
-            'godchild_code' => $godchild_code,
+            'godchild_code' => null,
         ]);
     }
 
@@ -62,11 +62,7 @@ class GachaponPlayController extends Controller
         ));
     }
 
-    /**
-     * @uses: Shows the official prize record for one godchild.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
+
     public function prize(string $token)
     {
         $participant = GachaponParticipant::where('verification_token', $token)
@@ -87,11 +83,7 @@ class GachaponPlayController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
-    /**
-     * @uses: Checks the special code and unlocks the gachapon machine for this browser.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
+
     public function verifyCode(Request $request, string $token): JsonResponse
     {
         $rs = [
@@ -159,11 +151,6 @@ class GachaponPlayController extends Controller
         return response()->json($rs);
     }
 
-    /**
-     * @uses: Draws one remaining gift at random for the verified godchild.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     public function open(string $token): JsonResponse
     {
         $rs = [
@@ -207,11 +194,7 @@ class GachaponPlayController extends Controller
         return response()->json($rs);
     }
 
-    /**
-     * @uses: Issues one special code for this browser, or reuses the code already given to it.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
+
     private function issue_godchild_code(GachaponMachine $machine): ?string
     {
         $existing_code = $this->current_display_code($machine);
@@ -274,11 +257,6 @@ class GachaponPlayController extends Controller
         });
     }
 
-    /**
-     * @uses: Returns the special code already stored for this browser and machine.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     private function current_display_code(GachaponMachine $machine): ?string
     {
         $stored_code       = session('gachapon_display_code');
@@ -304,11 +282,7 @@ class GachaponPlayController extends Controller
         return $stored_code;
     }
 
-    /**
-     * @uses: Returns the godchild unlocked in this browser for the given machine.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
+
     private function verified_participant(GachaponMachine $machine): ?GachaponParticipant
     {
         $participant_id     = session('gachapon_participant_id');
@@ -335,11 +309,7 @@ class GachaponPlayController extends Controller
         return $participant;
     }
 
-    /**
-     * @uses: Picks one in-stock gift, with larger remaining stock more likely to be drawn.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
+
     private function draw_random_gift(
         GachaponMachine $machine,
         GachaponParticipant $participant
@@ -469,11 +439,6 @@ class GachaponPlayController extends Controller
         return $draw;
     }
 
-    /**
-     * @uses: Builds a short special code the godchild can read and type.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     private function make_godchild_code(): string
     {
         $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -487,11 +452,6 @@ class GachaponPlayController extends Controller
         return 'GIFT-' . $chars;
     }
 
-    /**
-     * @uses: Trims and uppercases a special code before it is checked.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     private function normalize_code(string $code): string
     {
         $normalized = strtoupper(trim($code));
@@ -504,11 +464,6 @@ class GachaponPlayController extends Controller
         return $normalized;
     }
 
-    /**
-     * @uses: Turns a stored gift image path into a public URL.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     private function gift_image_url(?string $image_path): ?string
     {
         if ($image_path === null || $image_path === '') {

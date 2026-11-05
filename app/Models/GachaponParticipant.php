@@ -43,11 +43,6 @@ class GachaponParticipant extends Model
         return $this->hasMany(GachaponOpening::class, 'participant_id');
     }
 
-    /**
-     * @uses: Gives this godchild a private prize-page token when one is missing.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     public function ensure_verification_token(): self
     {
         if (
@@ -74,11 +69,7 @@ class GachaponParticipant extends Model
         return $this;
     }
 
-    /**
-     * @uses: Builds the official prize-page address for this godchild.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
+
     public function prize_url(): ?string
     {
         if (
@@ -93,11 +84,6 @@ class GachaponParticipant extends Model
         ]);
     }
 
-    /**
-     * @uses: Lists the prizes this godchild has already opened, newest first.
-     * @author: Jerico Nacario
-     * Date: 2026-10-29
-     */
     public function prize_rows(): array
     {
         $openings = $this->relationLoaded('openings')
