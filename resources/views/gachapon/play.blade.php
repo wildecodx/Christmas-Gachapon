@@ -873,7 +873,6 @@
     (() => {
         const envelope = document.getElementById('envelope');
         const envelopeTilt = document.getElementById('envelope-tilt');
-        const envelope = document.getElementById("envelope");
         const openButton = document.getElementById('open-envelope');
         const overlay = document.getElementById('letter-overlay');
         const closeButton = document.getElementById('close-letter');
